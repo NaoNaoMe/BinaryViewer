@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore BinaryViewer.sln
+
+      - name: Build
+        run: dotnet build BinaryViewer.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test BinaryViewer.sln -c Release --no-build
+
+      - name: Publish
+        run: dotnet publish BinaryViewer/BinaryViewer.csproj -c Release -p:PublishProfile=win-x64
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          $zip = "BinaryViewer-${{ github.ref_name }}-win-x64.zip"
+          $publishDir = "BinaryViewer/bin/Release/net10.0-windows/publish/win-x64"
+          $files = Get-ChildItem -Path $publishDir -File | Where-Object { $_.Extension -notin ".pdb", ".xml" }
+          Compress-Archive -Path $files.FullName -DestinationPath $zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: BinaryViewer-*.zip
+          generate_release_notes: true

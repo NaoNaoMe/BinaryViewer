@@ -1,0 +1,10 @@
+root = true
+
+[*.cs]
+# Require "this." for field/property/method/event access so Visual Studio's
+# WinForms designer keeps emitting this.-qualified code on every resave,
+# instead of drifting between styles and rewriting Designer.cs wholesale.
+dotnet_style_qualification_for_field = true:warning
+dotnet_style_qualification_for_property = true:warning
+dotnet_style_qualification_for_method = true:warning
+dotnet_style_qualification_for_event = true:warning

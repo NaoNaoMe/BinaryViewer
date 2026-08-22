@@ -1,0 +1,15 @@
+This project (BinaryViewer.Controls) is based on:
+
+  Be.Windows.Forms.HexBox
+  https://sourceforge.net/projects/hexbox/
+  Copyright (c) 2011 Bernhard Elbl
+
+by way of the fork:
+
+  Be.HexEditor
+  https://github.com/harborsiem/Be.HexEditor
+
+The code in this folder has been modified for use in BinaryViewer.
+
+Licensed under the MIT License — see LICENSE.txt in this folder for the
+full license text.

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>BinaryViewer</RootNamespace>
+    <AssemblyName>BinaryViewer</AssemblyName>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>Resources\AppIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\AppIcon.ico">
+      <LogicalName>BinaryViewer.Resources.AppIcon.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FirmwareImageFormat\FirmwareImageFormat.csproj" />
+    <ProjectReference Include="..\BinaryViewer.Controls\BinaryViewer.Controls.csproj" />
+  </ItemGroup>
+
+</Project>

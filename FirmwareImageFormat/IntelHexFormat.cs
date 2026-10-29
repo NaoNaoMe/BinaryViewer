@@ -145,19 +145,20 @@ namespace FirmwareImageFormat
             foreach (string text in textArray)
             {
                 var output = DecodeLine(text);
+
+                // The end-of-file record has an empty data field, so it must be recognized before empty
+                // records are skipped. Anything after it is not part of the image.
+                if (output.Type == RecordType.EndOfFile)
+                    break;
+
                 if (output.Data.Length <= 0)
                     continue;
 
-                bool isBreak = false;
                 switch (output.Type)
                 {
                     case RecordType.Data:
                         var address = extendedAddress + output.Address;
                         FirmwareImageBuilder.AppendOrMerge(image, address, output.Data);
-                        break;
-
-                    case RecordType.EndOfFile:
-                        isBreak = true;
                         break;
 
                     case RecordType.ExtendedSegmentAddress:
@@ -190,9 +191,6 @@ namespace FirmwareImageFormat
                         break;
 
                 }
-
-                if (isBreak)
-                    break;
             }
 
 
@@ -208,40 +206,72 @@ namespace FirmwareImageFormat
 
         /// <summary>
         /// Generates a complete Intel HEX file from scratch (for new files with no original RawText).
-        /// Supports IntelHexLinear (16-bit) and IntelHexExLinear (32-bit Extended Linear Address).
+        /// IntelHexLinear: 16-bit addresses only (0x0000 to 0xFFFF).
+        /// IntelHexExLinear (and IntelHexCombined): 32-bit addresses with Extended Linear Address records.
+        /// IntelHexExSegment: up to 1 MiB with Extended Segment Address records.
+        /// Throws ArgumentException when the data does not fit the address range of the format.
         /// </summary>
         public static List<string> Generate(FirmwareImage image, FormatType format)
         {
             const int bytesPerLine = 16;
+
+            // The 16-bit address field of a data record reaches this far; the extension records select the block.
+            const long blockSize = 0x10000;
+
+            RecordType extension = RecordType.Undefined;
+            long reach = blockSize;
+            if (format == FormatType.IntelHexExSegment)
+            {
+                extension = RecordType.ExtendedSegmentAddress;
+                reach = 0x100000L;
+            }
+            else if (format == FormatType.IntelHexExLinear || format == FormatType.IntelHexCombined)
+            {
+                extension = RecordType.ExtendedLinearAddress;
+                reach = 0x100000000L;
+            }
+
             var lines = new List<string>();
 
-            long currentUpper = -1;
+            long currentBlock = -1;
 
             foreach (var section in image.Sections)
             {
+                if (section.Bytes.Count > 0 &&
+                    (section.StartAddress < 0 || section.StartAddress + section.Bytes.Count > reach))
+                {
+                    throw new ArgumentException(TAG + ": " +
+                        "The data at 0x" + section.StartAddress.ToString("X") + " (" + section.Bytes.Count +
+                        " bytes) does not fit the address range of this format (0x00000000 to 0x" +
+                        (reach - 1).ToString("X8") + ").");
+                }
+
                 int offset = 0;
                 while (offset < section.Bytes.Count)
                 {
-                    int count = Math.Min(bytesPerLine, section.Bytes.Count - offset);
                     long absoluteAddress = section.StartAddress + offset;
+                    long block = absoluteAddress / blockSize;
 
-                    // Emit Extended Linear Address record when the upper 16 bits change
-                    if (format == FormatType.IntelHexExLinear)
+                    // Emit an extension record whenever the 64 KiB block changes.
+                    if (extension != RecordType.Undefined && block != currentBlock)
                     {
-                        long upper = (absoluteAddress >> 16) & 0xFFFF;
-                        if (upper != currentUpper)
-                        {
-                            currentUpper = upper;
-                            var ela = new RawData(0, RecordType.ExtendedLinearAddress,
-                                new byte[] { (byte)(upper >> 8), (byte)(upper & 0xFF) });
-                            lines.Add(EncodeData(ela));
-                        }
+                        currentBlock = block;
+
+                        // Linear: the upper 16 bits of the address. Segment: the block's base address / 16.
+                        long value = (extension == RecordType.ExtendedLinearAddress) ? block : block * 0x1000;
+                        var ext = new RawData(0, extension,
+                            new byte[] { (byte)((value >> 8) & 0xFF), (byte)(value & 0xFF) });
+                        lines.Add(EncodeData(ext));
                     }
 
+                    // A record never crosses a 64 KiB block: its address field only holds the lower 16 bits.
+                    long remainingInBlock = blockSize - (absoluteAddress % blockSize);
+                    int count = (int)Math.Min((long)Math.Min(bytesPerLine, section.Bytes.Count - offset), remainingInBlock);
+
                     var data = new RawData(
-                        absoluteAddress & 0xFFFF, // lower 16 bits
+                        absoluteAddress % blockSize, // lower 16 bits
                         RecordType.Data,
-                        section.Bytes.Skip(offset).Take(count).ToArray());
+                        section.Bytes.GetRange(offset, count).ToArray());
                     lines.Add(EncodeData(data));
 
                     offset += count;
